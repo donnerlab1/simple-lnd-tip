@@ -19,12 +19,18 @@ import (
 func tip(l *log.Logger, client lnrpc.LightningClient) string {
 	ctx := context.Background()
 	getInfoResp, err := client.GetInfo(ctx, &lnrpc.GetInfoRequest{})
+	pk := ""
 	if err != nil {
 		fmt.Println("Cannot get info from node:", err)
-		return err.Error()
+		pk = err.Error()
+	} else {
+		pk = getInfoResp.IdentityPubkey
 	}
 	spew.Dump(getInfoResp)
-	return "pubkey: " + getInfoResp.IdentityPubkey + ", http://donnerlab.com/get_invoice/"
+	ret := "Get invoice at http://donnerlab.com/get_invoice/\n"
+	ret += "pubkey: " + pk + "\n"
+	ret += "Proudly powered by https://github.com/donnerlab1/simple-lnd-tip"
+	return ret
 }
 
 func get_invoice(l *log.Logger, client lnrpc.LightningClient) string {
@@ -85,12 +91,14 @@ func main() {
 		grpc.WithPerRPCCredentials(macaroons.NewMacaroonCredential(mac)),
 	}
 
+	fmt.Print("Trying to connect to lnd...")
 	conn, err := grpc.Dial("localhost:10009", opts...)
 	if err != nil {
 		fmt.Println("cannot dial to lnd", err)
 		return
 	}
 	client := lnrpc.NewLightningClient(conn)
+	fmt.Println("ok")
 
 	m := martini.Classic()
 	m.Get("/tip", func(log *log.Logger) string {
