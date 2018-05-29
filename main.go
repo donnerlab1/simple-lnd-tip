@@ -12,6 +12,7 @@ import (
 	"gopkg.in/macaroon.v2"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/user"
 	"path"
 )
@@ -59,6 +60,10 @@ func pay_invoice(l *log.Logger, client lnrpc.LightningClient, payment_request st
 }
 
 func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: %s <listen_port> <lnd_port>", os.Args[0])
+		return
+	}
 	usr, err := user.Current()
 	if err != nil {
 		fmt.Println("Cannot get current user:", err)
@@ -92,7 +97,8 @@ func main() {
 	}
 
 	fmt.Print("Trying to connect to lnd...")
-	conn, err := grpc.Dial("localhost:10009", opts...)
+	lnd_port := os.Args[2]
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", lnd_port), opts...)
 	if err != nil {
 		fmt.Println("cannot dial to lnd", err)
 		return
@@ -110,6 +116,7 @@ func main() {
 	m.Get("/pay_invoice/**", func(log *log.Logger, params martini.Params) string {
 		return pay_invoice(log, client, params["_1"])
 	})
-	m.RunOnAddr(":8000")
+	listen_port := os.Args[1]
+	m.RunOnAddr(fmt.Sprintf(":%s", listen_port))
 
 }
