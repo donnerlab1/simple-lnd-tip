@@ -61,9 +61,13 @@ func pay_invoice(l *log.Logger, client lnrpc.LightningClient, payment_request st
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: %s <listen_port> <lnd_port>", os.Args[0])
+		fmt.Println("Usage: %s <testnet/mainnet> <listen_port> <lnd_port>", os.Args[0])
 		return
 	}
+    network := os.Args[1]
+	listen_port := os.Args[2]
+	lnd_port := os.Args[3]
+
 	usr, err := user.Current()
 	if err != nil {
 		fmt.Println("Cannot get current user:", err)
@@ -97,7 +101,6 @@ func main() {
 	}
 
 	fmt.Print("Trying to connect to lnd...")
-	lnd_port := os.Args[2]
 	conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", lnd_port), opts...)
 	if err != nil {
 		fmt.Println("cannot dial to lnd", err)
@@ -113,10 +116,11 @@ func main() {
 	m.Get("/get_invoice", func(log *log.Logger) string {
 		return get_invoice(log, client)
 	})
-	m.Get("/pay_invoice/**", func(log *log.Logger, params martini.Params) string {
-		return pay_invoice(log, client, params["_1"])
-	})
-	listen_port := os.Args[1]
+    if network == "testnet" {
+        m.Get("/pay_invoice/**", func(log *log.Logger, params martini.Params) string {
+            return pay_invoice(log, client, params["_1"])
+        })
+    }
 	m.RunOnAddr(fmt.Sprintf(":%s", listen_port))
 
 }
