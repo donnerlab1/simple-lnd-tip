@@ -12,12 +12,13 @@ import (
 	"gopkg.in/macaroon.v2"
 	"io/ioutil"
 	"log"
+    "strconv"
 	"os"
 	"os/user"
 	"path"
 )
 
-func tip(l *log.Logger, client lnrpc.LightningClient) string {
+func tip(l *log.Logger, client lnrpc.LightningClient, network string, hostname string) string {
 	ctx := context.Background()
 	getInfoResp, err := client.GetInfo(ctx, &lnrpc.GetInfoRequest{})
 	pk := ""
@@ -28,15 +29,41 @@ func tip(l *log.Logger, client lnrpc.LightningClient) string {
 		pk = getInfoResp.IdentityPubkey
 	}
 	spew.Dump(getInfoResp)
-	ret := "Get invoice at http://donnerlab.com/get_invoice/\n"
-	ret += "pubkey: " + pk + "\n"
+    port := "9735"
+    if network == "testnet" {
+        port = "19735"
+    }
+	ret := "<html>\n"
+    ret += "<p>"
+    ret += "<b>"
+	ret += "lightning " + network + " tip\n"
+    ret += "</b>"
+    ret += "</p>"
+    ret += "\n"
+    ret += "<p>"
+	ret += pk + "@" + hostname + ":" + port + "\n"
+    ret += "</p>"
+    link := "http://" + hostname + "/get_invoice/1000"
+    ret += "<p>"
+	ret += "Get invoice for 1000 sat at " + "<a href=\"" + link + "\">" + link + "</a>\n"
+    ret += "</p>"
+    ret += "\n"
+    ret += "<p>"
 	ret += "Proudly powered by https://github.com/donnerlab1/simple-lnd-tip"
+    ret += "</p>"
+	ret += "</html>\n"
 	return ret
 }
 
-func get_invoice(l *log.Logger, client lnrpc.LightningClient) string {
+func get_invoice(l *log.Logger, client lnrpc.LightningClient, value_str string) string {
 	ctx := context.Background()
-	addInvoiceResp, err := client.AddInvoice(ctx, &lnrpc.Invoice{})
+
+    value, err := strconv.Atoi(value_str)
+    if value_str == "" || err != nil {
+        value = 1000
+    }
+    invoice := lnrpc.Invoice{ Value: int64(value) }
+	addInvoiceResp, err := client.AddInvoice(ctx, &invoice)
 
 	if err != nil {
 		fmt.Println("Cannot get tip from node:", err)
@@ -61,12 +88,13 @@ func pay_invoice(l *log.Logger, client lnrpc.LightningClient, payment_request st
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: %s <testnet/mainnet> <listen_port> <lnd_port>", os.Args[0])
+		fmt.Println("Usage: %s <testnet/mainnet> <listen_port> <lnd_port> <hostname>", os.Args[0])
 		return
 	}
     network := os.Args[1]
 	listen_port := os.Args[2]
 	lnd_port := os.Args[3]
+	hostname := os.Args[4]
 
 	usr, err := user.Current()
 	if err != nil {
@@ -111,10 +139,13 @@ func main() {
 
 	m := martini.Classic()
 	m.Get("/tip", func(log *log.Logger) string {
-		return tip(log, client)
+		return tip(log, client, network, hostname)
 	})
 	m.Get("/get_invoice", func(log *log.Logger) string {
-		return get_invoice(log, client)
+		return get_invoice(log, client, "" )
+	})
+	m.Get("/get_invoice/**", func(log *log.Logger, params martini.Params) string {
+		return get_invoice(log, client, params["_1"] )
 	})
     if network == "testnet" {
         m.Get("/pay_invoice/**", func(log *log.Logger, params martini.Params) string {
